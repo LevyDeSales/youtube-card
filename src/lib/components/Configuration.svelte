@@ -28,6 +28,7 @@
 
 	let url = '';
 	let waitingGeneration = false;
+	let lastRequestedUrl = '';
 
 	/**
 	 * @type {boolean}
@@ -40,6 +41,16 @@
 	 * @param notif {boolean}
 	 */
 	const getVideoData = async (url, notif) => {
+		if (!url) return;
+		if (url === lastRequestedUrl) {
+			Logger.info('Configuration: URL unchanged, skipping fetch');
+			return;
+		}
+		if (loading) {
+			Logger.info('Configuration: Fetch already in progress, skipping fetch');
+			return;
+		}
+
 		const videoId = findVideoId(url);
 		const service = getService(url);
 		Logger.info(`Configuration: Processing URL for service: ${service}`);
@@ -64,6 +75,7 @@
 		}
 
 		try {
+			lastRequestedUrl = url;
 			loading = true;
 			const response = await fetch(`/_api/info`, {
 				method: 'POST',
@@ -234,7 +246,7 @@
 	};
 
 	const checkClipboard = () => {
-		setInterval(() => {
+		const clipboardIntervalId = setInterval(() => {
 			if (config.autoPaste) {
 				try {
 					navigator.clipboard.readText().then((clipboardElement) => {
@@ -244,6 +256,7 @@
 							getService(clipboardElement)
 						) {
 							url = clipboardElement;
+							getVideoData(clipboardElement, false);
 						}
 					});
 				} catch (e) {
@@ -251,6 +264,10 @@
 				}
 			}
 		}, 200);
+
+		onDestroy(() => {
+			clearInterval(clipboardIntervalId);
+		});
 	};
 
 	checkClipboard();
@@ -260,8 +277,6 @@
 			clipboardCopyEnabled = true;
 		}
 	});
-
-	$: url && getVideoData(url, false);
 
 	$: {
 		if (config?.style === 'instagram' && isInstagramUrl(config?.url)) {
