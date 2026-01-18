@@ -2,7 +2,7 @@
 	import { _ } from 'svelte-i18n';
 
 	/**
-	 * @type {{ initial: boolean, thumbnail: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string , isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string }}
+	 * @type {{ initial: boolean, thumbnailUrl?: string, thumbnail: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string , isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string }}
 	 */
 	export let data;
 
@@ -52,9 +52,9 @@
 >
 	<div
 		class="thumbnail"
-		style="background-image: url({data?.thumbnail}); {config.advanced && config.greenScreen
+		style={config.advanced && config.greenScreen
 			? 'background-color: #00FF00; background-image: none;'
-			: ''}"
+			: `background-image: url(${data?.thumbnail});`}
 	>
 		{#if data?.thumbnailUrl && !(config.advanced && config.greenScreen)}
 			<img src={data?.thumbnailUrl} alt="youtube thumbnail" />

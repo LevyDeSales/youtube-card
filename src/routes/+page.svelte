@@ -2,21 +2,36 @@
 	import { onMount } from 'svelte';
 	import Configuration from '$lib/components/Configuration.svelte';
 	import Card from '$lib/components/Card.svelte';
-
-	const regex =
-		/(?:https?:\/\/)?(?:(?:(?:www\.|m\.)?youtube\.com|music\.youtube\.com)\/(?:shorts\/|live\/|watch\?v=|v\/|e(?:mbed)?\/|[^\/\n\s]+\/\S+\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+	import { findVideoId } from '$lib/utils/helpers';
+	import { Logger } from '$lib/utils/logger';
 
 	/**
-	 * @type {{ initial: boolean, thumbnailUrl: string, thumbnail: string, channelLogoUrl: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string, isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string, likes?: string, subscribers?: string } | null}
+	 * @type {{ initial: boolean, thumbnailUrl: string, thumbnail: string, channelLogoUrl: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string, isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string, likes?: string, subscribers?: string }}
 	 */
-	let data = null;
+	let data = {
+		initial: true,
+		thumbnailUrl: '/thumbnail.webp',
+		thumbnail: '/thumbnail.webp',
+		channelLogoUrl: '/basti-logo.png',
+		channelLogo: '/basti-logo.png',
+		title: 'Je quitte mon CDI de Designer',
+		channel: 'BastiUi',
+		views: '31,2 k',
+		time: 'il y a 2 ans',
+		duration: '09:27',
+		isLive: false,
+		isUpcoming: false,
+		startDate: '',
+		viewers: ''
+	};
 
 	/**
-	 * @type {{ style: string, initial: boolean, displayChannel: boolean, duration: number, displayMeta: boolean, theme: string, size: number, displayDuration: boolean, url?: string, advanced: boolean, rounding: number, textSize: number, spacing: number, autoPaste: boolean, greenScreen: boolean }}
+	 * @type {{ style: string, initial: boolean, displayChannel: boolean, displayChannelName: boolean, duration: number, displayMeta: boolean, theme: string, size: number, displayDuration: boolean, url?: string, advanced: boolean, rounding: number, textSize: number, spacing: number, autoPaste: boolean, greenScreen: boolean, instagramLayout?: 'square' | 'rect' }}
 	 */
 	let config = {
 		initial: true,
 		displayChannel: false,
+		displayChannelName: true,
 		duration: 0,
 		displayMeta: true,
 		theme: 'white',
@@ -28,7 +43,8 @@
 		spacing: 1,
 		autoPaste: false,
 		style: 'computer',
-		greenScreen: false
+		greenScreen: false,
+		instagramLayout: 'square'
 	};
 
 	let loading = false;
@@ -44,20 +60,7 @@
 			config = JSON.parse(savedConfig);
 		}
 
-		if (savedData) {
-			data = JSON.parse(savedData);
-		} else {
-			data = {
-				initial: true,
-				thumbnail: '/thumbnail.webp',
-				channelLogo: '/basti-logo.png',
-				title: 'Je quitte mon CDI de Designer',
-				channel: 'BastiUi',
-				views: '31,2 k',
-				time: 'il y a 2 ans',
-				duration: '09:27'
-			};
-		}
+		if (savedData) data = JSON.parse(savedData);
 
 		const urlParams = new URLSearchParams(window.location.search);
 		const sharedData = urlParams.get('config');
@@ -82,6 +85,7 @@
 	});
 
 	const getVideo = async () => {
+		if (!config.url) return;
 		const videoId = findVideoId(config.url);
 
 		try {
@@ -91,10 +95,11 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ videoId, language: navigator.language })
+				body: JSON.stringify({ videoId, language: navigator.language, url: config.url })
 			});
 
 			if (response.status !== 200) {
+				Logger.warn(`Page: Fetch failed with status ${response.status}`);
 				return;
 			}
 
@@ -102,16 +107,8 @@
 			loading = false;
 		} catch (error) {
 			loading = false;
+			Logger.error('Page: Error fetching data', error);
 		}
-	};
-
-	/**
-	 *
-	 * @param url {string}
-	 */
-	const findVideoId = (url) => {
-		const match = url.match(regex);
-		return match ? match[1] : null;
 	};
 
 	/**
@@ -135,7 +132,9 @@
 
 				updateQueryParams();
 			}
-		} catch (e) {}
+		} catch (e) {
+			Logger.warn('Page: Failed to update localStorage/query params', e);
+		}
 	};
 
 	const updateQueryParams = () => {

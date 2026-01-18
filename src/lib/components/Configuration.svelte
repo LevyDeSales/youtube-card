@@ -1,15 +1,13 @@
 <script>
 	import { snacks } from '$lib/stores/snacks';
-	import { toPng } from 'html-to-image';
 	import { domToBlob, domToPng } from 'modern-screenshot';
-	import { fade, scale, slide } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
 	import Switch from './Switch.svelte';
 	import Tooltip from './Tooltip.svelte';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { _ } from 'svelte-i18n';
-
-	const regex =
-		/(?:https?:\/\/)?(?:(?:(?:www\.|m\.)?youtube\.com|music\.youtube\.com)\/(?:shorts\/|live\/|watch\?v=|v\/|e(?:mbed)?\/|[^\/\n\s]+\/\S+\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+	import { findVideoId, getService, isInstagramUrl } from '$lib/utils/helpers';
+	import { Logger } from '$lib/utils/logger';
 
 	/**
 	 * @type {string | null}
@@ -24,7 +22,7 @@
 	export let data;
 
 	/**
-	 * @type {{ style: string, initial: boolean, displayChannel: boolean, duration: number, displayMeta: boolean, theme: string, size: number, displayDuration: boolean, url: string, advanced: boolean, rounding: number, textSize: number, spacing: number, autoPaste: boolean, greenScreen: boolean, displayChannelName: boolean }}
+	 * @type {{ style: string, initial: boolean, displayChannel: boolean, duration: number, displayMeta: boolean, theme: string, size: number, displayDuration: boolean, url?: string, advanced: boolean, rounding: number, textSize: number, spacing: number, autoPaste: boolean, greenScreen: boolean, displayChannelName: boolean, instagramLayout?: 'square' | 'rect' }}
 	 */
 	export let config;
 
@@ -39,24 +37,30 @@
 	/**
 	 *
 	 * @param url {string}
-	 */
-	const findVideoId = (url) => {
-		const regex =
-			/(?:https?:\/\/)?(?:(?:(?:www\.|m\.)?youtube\.com|music\.youtube\.com)\/(?:shorts\/|live\/|watch\?v=|v\/|e(?:mbed)?\/|[^\/\n\s]+\/\S+\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-		const match = url.match(regex);
-		return match ? match[1] : null;
-	};
-
-	/**
-	 *
-	 * @param url {string}
 	 * @param notif {boolean}
 	 */
 	const getVideoData = async (url, notif) => {
 		const videoId = findVideoId(url);
+		const service = getService(url);
+		Logger.info(`Configuration: Processing URL for service: ${service}`);
+
 		if (!videoId) {
 			if (notif) snacks.error($_('configuration.invalid_url'));
+			Logger.warn(`Configuration: Invalid URL provided: ${url}`);
 			return;
+		}
+
+		if (service === 'instagram') {
+			if (config.style !== 'instagram') {
+				Logger.info('Configuration: Switching style to Instagram');
+				config.style = 'instagram';
+			}
+		} else if (service === 'youtube') {
+			// Only switch back to default computer style if we are currently in instagram mode
+			if (config.style === 'instagram') {
+				Logger.info('Configuration: Switching style to Computer (Default YouTube)');
+				config.style = 'computer';
+			}
 		}
 
 		try {
@@ -66,21 +70,55 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ videoId, language: navigator.language })
+				body: JSON.stringify({ videoId, language: navigator.language, url })
 			});
 
 			if (response.status !== 200) {
 				if (notif) snacks.error($_('configuration.error_when_fetching'));
+				Logger.warn(`Configuration: Fetch failed with status ${response.status}`);
 				return;
 			}
 
 			data = await response.json();
 			config.url = url;
+			Logger.info('Configuration: Data updated successfully');
 			loading = false;
 		} catch (error) {
 			loading = false;
 			if (notif) snacks.error($_('configuration.error_when_fetching'));
+			Logger.error('Configuration: Error fetching data', error);
 		}
+	};
+
+	/**
+	 * @param {unknown} value
+	 */
+	/**
+	 * @type {ReturnType<typeof setInterval> | null}
+	 */
+	let instagramPollId = null;
+
+	const refreshInstagram = async () => {
+		if (loading) return;
+		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+		if (!isInstagramUrl(config?.url)) return;
+
+		await getVideoData(config.url, false);
+	};
+
+	const startInstagramPolling = () => {
+		if (typeof window === 'undefined') return;
+		if (instagramPollId) return;
+		instagramPollId = setInterval(refreshInstagram, 60000);
+		window.addEventListener('focus', refreshInstagram);
+	};
+
+	const stopInstagramPolling = () => {
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('focus', refreshInstagram);
+		}
+		if (instagramPollId) clearInterval(instagramPollId);
+		instagramPollId = null;
 	};
 
 	/**
@@ -100,15 +138,23 @@
 				? '.likes-card'
 				: config.style === 'subscribe'
 					? '.subscribe-card'
-					: '.youtube-card';
+					: config.style === 'instagram'
+						? '.instagram-card'
+						: '.youtube-card';
 		const node = document.querySelector(selector);
+		if (!node) {
+			waitingGeneration = false;
+			if (e.target) e.target.innerText = 'Download';
+			snacks.error($_('configuration.error_when_fetching'));
+			return;
+		}
 		const dataUrl = await domToPng(node, {
 			scale: 1 + (config.size || 1),
 			quality: 1
 		});
 		const a = document.createElement('a');
 		a.href = dataUrl;
-		a.download = `ytb-${data.channel}-${data.title}.png`;
+		a.download = `ytb-${data?.channel ?? 'channel'}-${data?.title ?? 'title'}.png`;
 		a.click();
 
 		waitingGeneration = false;
@@ -137,8 +183,16 @@
 				? '.likes-card'
 				: config.style === 'subscribe'
 					? '.subscribe-card'
-					: '.youtube-card';
+					: config.style === 'instagram'
+						? '.instagram-card'
+						: '.youtube-card';
 		const node = document.querySelector(selector);
+		if (!node) {
+			waitingGeneration = false;
+			if (e.target) e.target.innerText = 'Copy';
+			snacks.error($_('configuration.error_when_fetching'));
+			return;
+		}
 		domToBlob(node, {
 			scale: 1 + (config.size || 1),
 			quality: 1
@@ -168,6 +222,7 @@
 				}, 2000);
 			})
 			.catch((error) => {
+				Logger.error('Configuration: Error copying image', error);
 				waitingGeneration = false;
 				if (e.target) e.target.innerText = 'Error!';
 				action = null;
@@ -178,27 +233,6 @@
 			});
 	};
 
-	/**
-	 *
-	 * @param {string} dataUrl
-	 * @returns {Blob}
-	 */
-	const dataUrlToBlob = (dataUrl) => {
-		var base64Index = dataUrl.indexOf('base64,') + 'base64,'.length;
-		var base64 = dataUrl.substring(base64Index);
-
-		var binary = atob(base64);
-		var binaryLength = binary.length;
-		var bytes = new Uint8Array(binaryLength);
-
-		for (var i = 0; i < binaryLength; i++) {
-			bytes[i] = binary.charCodeAt(i);
-		}
-
-		var blob = new Blob([bytes], { type: 'image/png' });
-		return blob;
-	};
-
 	const checkClipboard = () => {
 		setInterval(() => {
 			if (config.autoPaste) {
@@ -207,12 +241,14 @@
 						if (
 							clipboardElement &&
 							clipboardElement != config.url &&
-							clipboardElement.match(regex)
+							getService(clipboardElement)
 						) {
 							url = clipboardElement;
 						}
 					});
-				} catch (e) {}
+				} catch (e) {
+					Logger.warn('Configuration: Failed to read clipboard', e);
+				}
 			}
 		}, 200);
 	};
@@ -226,6 +262,18 @@
 	});
 
 	$: url && getVideoData(url, false);
+
+	$: {
+		if (config?.style === 'instagram' && isInstagramUrl(config?.url)) {
+			startInstagramPolling();
+		} else {
+			stopInstagramPolling();
+		}
+	}
+
+	onDestroy(() => {
+		stopInstagramPolling();
+	});
 </script>
 
 <div class="configuration">
@@ -364,8 +412,47 @@
 						/>
 					</svg>
 				</button>
+				<button
+					class="instagram {config.style == 'instagram' ? 'select' : ''}"
+					on:click={() => (config.style = 'instagram')}
+					title="Style Instagram"
+				>
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<rect x="2" y="2" width="20" height="20" rx="5" stroke="#F0F0F0" stroke-width="1.5" />
+						<circle cx="12" cy="12" r="4" stroke="#F0F0F0" stroke-width="1.5" />
+						<circle cx="18" cy="6" r="1" fill="#F0F0F0" />
+					</svg>
+				</button>
 			</div>
 		</div>
+
+		{#if config.style === 'instagram'}
+			<div class="config-container">
+				<span>Formato</span>
+				<div class="theme-button">
+					<button
+						class="instagram {config.instagramLayout !== 'rect' ? 'select' : ''}"
+						on:click={() => (config.instagramLayout = 'square')}
+						title="Instagram quadrado"
+					>
+						<span>▢</span>
+					</button>
+					<button
+						class="instagram {config.instagramLayout === 'rect' ? 'select' : ''}"
+						on:click={() => (config.instagramLayout = 'rect')}
+						title="Instagram retangular"
+					>
+						<span>▭</span>
+					</button>
+				</div>
+			</div>
+		{/if}
 
 		<div class="config-container">
 			<span>{$_('configuration.display')}</span>

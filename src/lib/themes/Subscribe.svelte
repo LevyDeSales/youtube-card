@@ -1,6 +1,4 @@
 <script>
-	import { _ } from 'svelte-i18n';
-
 	/**
 	 * @type {{ initial: boolean, thumbnail: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string , isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string, likes?: string, subscribers?: string }}
 	 */

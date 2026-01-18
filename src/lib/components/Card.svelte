@@ -3,17 +3,18 @@
 	import Computer from '../themes/Computer.svelte';
 	import Likes from '../themes/Likes.svelte';
 	import Subscribe from '../themes/Subscribe.svelte';
+	import Instagram from '../themes/Instagram.svelte';
 
 	import { cubicOut } from 'svelte/easing';
-	import { blur, fade, slide } from 'svelte/transition';
+	import { blur } from 'svelte/transition';
 
 	/**
-	 * @type {{ initial: boolean, thumbnail: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string , isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string, likes?: string, subscribers?: string }}
+	 * @type {{ initial: boolean, thumbnailUrl?: string, thumbnail: string, channelLogo: string, title: string, channel: string, views: string, time: string, duration: string , isLive: boolean, isUpcoming: boolean, startDate: string, viewers: string, likes?: string, subscribers?: string }}
 	 */
 	export let data;
 
 	/**
-	 * @type {{ style: string, initial: boolean, displayChannel: boolean, duration: number, displayMeta: boolean, theme: string, displayDuration: boolean, rounding: number, textSize: number, advanced: boolean, spacing: number, greenScreen: boolean }}
+	 * @type {{ style: string, initial: boolean, displayChannel: boolean, displayChannelName: boolean, duration: number, displayMeta: boolean, theme: string, displayDuration: boolean, rounding: number, textSize: number, advanced: boolean, spacing: number, greenScreen: boolean, instagramLayout?: 'square' | 'rect' }}
 	 */
 	export let config;
 
@@ -24,13 +25,15 @@
 </script>
 
 <div class="design">
-	{#key data?.thumbnailUrl}
-		<div
-			transition:blur={{ duration: 400, easing: cubicOut }}
-			class="background"
-			style="background-image: url({data?.thumbnailUrl});"
-		></div>
-	{/key}
+	{#if data?.thumbnailUrl}
+		{#key data.thumbnailUrl}
+			<div
+				transition:blur={{ duration: 400, easing: cubicOut }}
+				class="background"
+				style="background-image: url({data.thumbnailUrl});"
+			></div>
+		{/key}
+	{/if}
 	{#if data}
 		{#if config.style === 'mobile'}
 			<Mobile {data} {config} {loading} />
@@ -38,6 +41,8 @@
 			<Likes {data} {config} {loading} />
 		{:else if config.style === 'subscribe'}
 			<Subscribe {data} {config} {loading} />
+		{:else if config.style === 'instagram'}
+			<Instagram {data} {config} {loading} />
 		{:else}
 			<Computer {data} {config} {loading} />
 		{/if}

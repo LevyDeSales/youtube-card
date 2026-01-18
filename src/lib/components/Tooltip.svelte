@@ -2,8 +2,8 @@
 	export let title = '';
 	export let disabledOnMobile = false;
 	let isHovered = false;
-	let x;
-	let y;
+	let x = 0;
+	let y = 0;
 
 	function mouseOver(event) {
 		isHovered = true;
