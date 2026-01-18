@@ -104,7 +104,8 @@
 		max-width: 375px;
 		padding: 1rem;
 		background-color: white;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
